@@ -14,16 +14,24 @@ public class DecisionService
     public RecognitionResult Recognize(KnowledgeBase knowledgeBase, IReadOnlyList<bool> answers)
     {
         var result = new RecognitionResult();
+
+        if (knowledgeBase.Objects.Count == 0)
+        {
+            result.WinnerIndex = -1;
+            result.ExplanationText = "База знань не містить жодного об'єкта для розпізнавання.";
+            return result;
+        }
+
         var bestScore = int.MinValue;
-        var winnerIndex = 0;
+        var winnerIndex = -1;
 
         for (var i = 0; i < knowledgeBase.Objects.Count; i++)
         {
             var score = 0;
             for (var k = 0; k < knowledgeBase.Features.Count; k++)
             {
-                var answerValue = answers[k] ? 1 : 0;
-                score += knowledgeBase.Weights[i][k] * answerValue;
+                var answerValue = k < answers.Count && answers[k] ? 1 : 0;
+                score += GetWeightSafe(knowledgeBase, i, k) * answerValue;
             }
 
             result.Scores.Add(score);
@@ -39,23 +47,46 @@ public class DecisionService
         return result;
     }
 
+    private static int GetWeightSafe(KnowledgeBase knowledgeBase, int objectIndex, int featureIndex)
+    {
+        if (objectIndex < 0 || objectIndex >= knowledgeBase.Weights.Count)
+        {
+            return 0;
+        }
+
+        var objectWeights = knowledgeBase.Weights[objectIndex];
+        if (featureIndex < 0 || featureIndex >= objectWeights.Count)
+        {
+            return 0;
+        }
+
+        return objectWeights[featureIndex];
+    }
+
     private static string BuildExplanation(KnowledgeBase knowledgeBase, IReadOnlyList<bool> answers, int winnerIndex)
     {
         var lines = new List<string>();
+
+        if (winnerIndex < 0 || winnerIndex >= knowledgeBase.Objects.Count)
+        {
+            lines.Add("Не вдалося визначити переможця через некоректні дані бази знань.");
+            return string.Join(Environment.NewLine, lines);
+        }
+
         lines.Add($"Переможець: {knowledgeBase.Objects[winnerIndex].Name}");
         lines.Add("Ознаки з відповіддю 'так' та їх внесок:");
 
         var hasSelectedFeatures = false;
         for (var k = 0; k < knowledgeBase.Features.Count; k++)
         {
-            if (!answers[k])
+            if (k >= answers.Count || !answers[k])
             {
                 continue;
             }
 
             hasSelectedFeatures = true;
             var featureName = knowledgeBase.Features[k].Name;
-            var weight = knowledgeBase.Weights[winnerIndex][k];
+            var weight = GetWeightSafe(knowledgeBase, winnerIndex, k);
             lines.Add($"- {featureName}: вага {weight}");
         }
 

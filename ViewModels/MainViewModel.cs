@@ -166,13 +166,26 @@ public class MainViewModel : ObservableObject
         var answers = Features.Select(f => f.IsSelected).ToList();
         var recognitionResult = _decisionService.Recognize(_knowledgeBase, answers);
 
+        if (recognitionResult.WinnerIndex < 0 || recognitionResult.WinnerIndex >= _knowledgeBase.Objects.Count)
+        {
+            Results.Clear();
+            _predictedIndex = -1;
+            _hasRecognition = false;
+            PredictedObjectName = "Неможливо розпізнати";
+            ExplanationText = recognitionResult.ExplanationText;
+            TrainingChangesText = "";
+            StatusMessage = "Розпізнавання не виконано: перевірте структуру бази знань.";
+            RaiseCommandStates();
+            return;
+        }
+
         Results.Clear();
         for (var i = 0; i < _knowledgeBase.Objects.Count; i++)
         {
             Results.Add(new ResultRowViewModel
             {
                 ObjectName = _knowledgeBase.Objects[i].Name,
-                Score = recognitionResult.Scores[i],
+                Score = i < recognitionResult.Scores.Count ? recognitionResult.Scores[i] : 0,
                 IsWinner = i == recognitionResult.WinnerIndex
             });
         }
